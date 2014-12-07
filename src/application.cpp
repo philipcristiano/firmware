@@ -35,6 +35,7 @@ int tinkerAnalogWrite(String command);
 SYSTEM_MODE(AUTOMATIC);
 
 /* This function is called once at start up ----------------------------------*/
+int led = D7;
 void setup()
 {
 	//Setup the Tinker application here
@@ -45,6 +46,7 @@ void setup()
 
 	Spark.function("analogread", tinkerAnalogRead);
 	Spark.function("analogwrite", tinkerAnalogWrite);
+    pinMode(led, OUTPUT);
 
 }
 
@@ -52,6 +54,10 @@ void setup()
 void loop()
 {
     //This will run in a loop
+    digitalWrite(led, HIGH);   // Turn ON the LED
+    delay(1000);               // Wait for 1000mS = 1 second
+    digitalWrite(led, LOW);    // Turn OFF the LED
+    delay(1000);               // Wait for 1 second
 }
 
 /*******************************************************************************
