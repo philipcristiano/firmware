@@ -32,28 +32,74 @@ int tinkerDigitalWrite(String command);
 int tinkerAnalogRead(String pin);
 int tinkerAnalogWrite(String command);
 
-SYSTEM_MODE(AUTOMATIC);
+SYSTEM_MODE(MANUAL);
 
-/* This function is called once at start up ----------------------------------*/
-void setup()
-{
-	//Setup the Tinker application here
+TCPClient client;
 
-	//Register all the Tinker functions
-	Spark.function("digitalread", tinkerDigitalRead);
-	Spark.function("digitalwrite", tinkerDigitalWrite);
-
-	Spark.function("analogread", tinkerAnalogRead);
-	Spark.function("analogwrite", tinkerAnalogWrite);
-
+void ipArrayFromString(byte ipArray[], String ipString) {
+  int dot1 = ipString.indexOf('.');
+  ipArray[0] = ipString.substring(0, dot1).toInt();
+  int dot2 = ipString.indexOf('.', dot1 + 1);
+  ipArray[1] = ipString.substring(dot1 + 1, dot2).toInt();
+  dot1 = ipString.indexOf('.', dot2 + 1);
+  ipArray[2] = ipString.substring(dot2 + 1, dot1).toInt();
+  ipArray[3] = ipString.substring(dot1 + 1).toInt();
 }
 
-/* This function loops forever --------------------------------------------*/
-void loop()
-{
-    //This will run in a loop
+int connectToMyServer(String ip) {
+  byte serverAddress[4];
+  ipArrayFromString(serverAddress, ip);
+
+  if (client.connect(serverAddress, 2003)) {
+    return 1; // successfully connected
+  } else {
+    return -1; // failed to connect
+  }
 }
 
+
+void run_connect() {
+  int resp = connectToMyServer("192.168.1.106");
+  Serial.println(resp);
+}
+
+void setup() {
+  // Spark.function("connect", connectToMyServer);
+  Serial.begin(9600);
+  Serial.println("Starting");
+  WiFi.on();
+  WiFi.connect();
+  while( ! WiFi.ready() ) {
+      Serial.println("Waiting for wifi to be ready");
+      delay(1000);
+  }
+
+  for (int pin = D0; pin <= D7; ++pin) {
+    pinMode(pin, OUTPUT);
+  }
+  run_connect();
+}
+
+void loop() {
+  Serial.println("loop");
+  if (client.connected()) {
+    Serial.println("conn");
+    client.print("local.random.diceroll.2 3 0\n");
+    if (client.available()) {
+      Serial.println("avail");
+      // char pin = client.read() - '0' + D0;
+      // char level = client.read();
+      // if ('h' == level) {
+      //   digitalWrite(pin, HIGH);
+      // } else {
+      //   digitalWrite(pin, LOW);
+      // }
+    }
+  } else {
+    run_connect();
+  }
+  delay(200);
+}
 /*******************************************************************************
  * Function Name  : tinkerDigitalRead
  * Description    : Reads the digital value of a given pin
