@@ -25,6 +25,8 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "application.h"
+#include "DS18B20.h"
+#include "OneWire.h"
 
 /* Function prototypes -------------------------------------------------------*/
 int tinkerDigitalRead(String pin);
@@ -36,6 +38,9 @@ SYSTEM_MODE(MANUAL);
 
 TCPClient client;
 
+DS18B20 ds18b20 = DS18B20(D6);
+char szInfo[64];
+
 void ipArrayFromString(byte ipArray[], String ipString) {
   int dot1 = ipString.indexOf('.');
   ipArray[0] = ipString.substring(0, dot1).toInt();
@@ -46,21 +51,35 @@ void ipArrayFromString(byte ipArray[], String ipString) {
   ipArray[3] = ipString.substring(dot1 + 1).toInt();
 }
 
-int connectToMyServer(String ip) {
+bool connectToMyServer(String ip) {
   byte serverAddress[4];
   ipArrayFromString(serverAddress, ip);
 
-  if (client.connect(serverAddress, 2003)) {
-    return 1; // successfully connected
+  return client.connect(serverAddress, 2003);
+}
+
+bool search_for_ds_onewire() {
+  if(!ds18b20.search()){
+      Serial.println("No more addresses.");
+      Serial.println();
+      ds18b20.resetsearch();
+
+      return false;
   } else {
-    return -1; // failed to connect
+    return true;
   }
 }
 
+float get_temp() {
+  return ds18b20.getTemperature();
 
-void run_connect() {
-  int resp = connectToMyServer("192.168.1.106");
+}
+
+bool run_connect() {
+  bool resp = connectToMyServer("192.168.1.145");
+  Serial.print("Did we connect? ");
   Serial.println(resp);
+  return resp;
 }
 
 void setup() {
@@ -69,7 +88,7 @@ void setup() {
   Serial.println("Starting");
   WiFi.on();
   WiFi.connect();
-  while( ! WiFi.ready() ) {
+  while( !WiFi.ready() ) {
       Serial.println("Waiting for wifi to be ready");
       delay(1000);
   }
@@ -77,25 +96,31 @@ void setup() {
   for (int pin = D0; pin <= D7; ++pin) {
     pinMode(pin, OUTPUT);
   }
+
+  Serial.println("Searching for Dallas 1-wire probe");
+  while(!search_for_ds_onewire()) {
+    delay(250);
+  }
+  Serial.println("Probe found!");
+
   run_connect();
 }
 
 void loop() {
   Serial.println("loop");
+  float temp = get_temp();
+  Serial.println(temp);
   if (client.connected()) {
-    Serial.println("conn");
-    client.print("local.random.diceroll.2 3 0\n");
-    if (client.available()) {
-      Serial.println("avail");
-      // char pin = client.read() - '0' + D0;
-      // char level = client.read();
-      // if ('h' == level) {
-      //   digitalWrite(pin, HIGH);
-      // } else {
-      //   digitalWrite(pin, LOW);
-      // }
-    }
+    Serial.println("Connected, sending...");
+    client.print("device.");
+    client.print(Spark.deviceID());
+    client.print(".temp ");
+    client.print(temp);
+    client.print(" 0\n");
+    Serial.print("Done!");
+    delay(60000);
   } else {
+    client.stop();
     run_connect();
   }
   delay(200);
