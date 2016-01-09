@@ -28,6 +28,9 @@
 #include <stdlib.h>
 #include <time.h>
 #include "device_keys.h"
+#include "debug.h"
+#include "spark_wiring_string.h"
+#include "string_convert.h"
 
 #ifndef PRODUCT_ID
 #define PRODUCT_ID (0xffff)
@@ -96,6 +99,7 @@ void SparkProtocol::init(const char *id,
 
 int SparkProtocol::handshake(void)
 {
+  DEBUG("Start handshake");
   memcpy(queue + 40, device_id, 12);
   int err = blocking_receive(queue, 40);
   if (0 > err) return err;
@@ -112,10 +116,14 @@ int SparkProtocol::handshake(void)
 
   blocking_send(queue + len, 256);
   err = blocking_receive(queue, 384);
+  DEBUG("Receive session key info");
   if (0 > err) return err;
+  DEBUG("Set key");
 
   err = set_key(queue);
+  DEBUG("Set key done %d", err);
   if (err) return err;
+  DEBUG("Set key passed");
 
   queue[0] = 0x00;
   queue[1] = 0x10;
@@ -127,6 +135,7 @@ int SparkProtocol::handshake(void)
   if (!event_loop())        // read the hello message from the server
       return -1;
 
+  DEBUG("Done Handshake!");
   return 0;
 }
 
@@ -140,8 +149,10 @@ bool SparkProtocol::event_loop(void)
   if (2 <= bytes_received)
   {
     bool success = handle_received_message();
+    DEBUG("Done handling receive message, lets see what happened!");
     if (!success)
     {
+        DEBUG("Failure to handle received message :(");
         if (updating) {      // was updating but had an error, inform the client
             serial_dump("handle received message failed - aborting transfer");
             callbacks.finish_firmware_update(file, 0, NULL);
@@ -1437,14 +1448,17 @@ bool SparkProtocol::send_description(int description_flags, msg& message)
 
 bool SparkProtocol::handle_received_message(void)
 {
+  DEBUG("Start handling received message");
   last_message_millis = callbacks.millis();
   expecting_ping_ack = false;
   size_t len = queue[0] << 8 | queue[1];
   if (len > QUEUE_SIZE) { // TODO add sanity check on data, e.g. CRC
+      DEBUG("Len is great then queue size!");
       return false;
   }
   if (0 > blocking_receive(queue, len))
   {
+    DEBUG("0 greater than something!");
     // error
     return false;
   }
@@ -1459,22 +1473,27 @@ bool SparkProtocol::handle_received_message(void)
   message.response = msg_to_send;
   message.response_len = QUEUE_SIZE-len;
 
+  DEBUG("Switch on message type");
+
   switch (message_type)
   {
     case CoAPMessageType::DESCRIBE:
     {
+        DEBUG("Message: Describe");
         if (!send_description(DESCRIBE_SYSTEM, message) || !send_description(DESCRIBE_APPLICATION, message)) {
             return false;
         }
         break;
     }
     case CoAPMessageType::FUNCTION_CALL:
+        DEBUG("Message: Function Call");
         if (!handle_function_call(message))
             return false;
         break;
     case CoAPMessageType::VARIABLE_REQUEST:
     {
       // copy the variable key
+      DEBUG("Message: Variable Request");
       int variable_key_length = queue[7] & 0x0F;
       if (12 < variable_key_length)
         variable_key_length = 12;
@@ -1531,21 +1550,26 @@ bool SparkProtocol::handle_received_message(void)
     case CoAPMessageType::SAVE_BEGIN:
       // fall through
     case CoAPMessageType::UPDATE_BEGIN:
+        DEBUG("Message: Update Begin");
         return handle_update_begin(message);
 
     case CoAPMessageType::CHUNK:
+        DEBUG("Message: Chunk");
         return handle_chunk(message);
 
     case CoAPMessageType::UPDATE_DONE:
+        DEBUG("Message: update done");
         return handle_update_done(message);
 
     case CoAPMessageType::EVENT:
+        DEBUG("Message: event");
         handle_event(message);
           break;
     case CoAPMessageType::KEY_CHANGE:
       // TODO
       break;
     case CoAPMessageType::SIGNAL_START:
+      DEBUG("Message: signal start");
       queue[0] = 0;
       queue[1] = 16;
       coded_ack(queue + 2, token, ChunkReceivedCode::OK, queue[2], queue[3]);
@@ -1571,14 +1595,17 @@ bool SparkProtocol::handle_received_message(void)
       break;
 
     case CoAPMessageType::HELLO:
+      DEBUG("Message: HELLO");
       descriptor.ota_upgrade_status_sent();
       break;
 
     case CoAPMessageType::TIME:
+      DEBUG("Message: Time");
       handle_time_response(queue[6] << 24 | queue[7] << 16 | queue[8] << 8 | queue[9]);
       break;
 
     case CoAPMessageType::PING:
+      DEBUG("Message: Ping");
       *msg_to_send = 0;
       *(msg_to_send + 1) = 16;
       empty_ack(msg_to_send + 2, queue[2], queue[3]);
@@ -1690,7 +1717,10 @@ int SparkProtocol::set_key(const unsigned char *signed_encrypted_credentials)
 
     return 0;
   }
-  else return 2;
+  else {
+    DEBUG("Signature doesn't match");
+    return 2;
+  }
 }
 
 inline void SparkProtocol::coded_ack(unsigned char *buf,

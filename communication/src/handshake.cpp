@@ -23,6 +23,8 @@
   ******************************************************************************
   */
 #include "handshake.h"
+#include "debug.h"
+
 
 int ciphertext_from_nonce_and_id(const unsigned char *nonce,
                                  const unsigned char *id,
@@ -70,6 +72,9 @@ int verify_signature(const unsigned char *signature,
   rsa_context rsa;
   init_rsa_context_with_public_key(&rsa, pubkey);
 
+  DEBUG("Verifying signature");
+  DEBUG("expected hmac %X", *expected_hmac);
+  DEBUG("signature %X", *signature);
   int ret = rsa_pkcs1_verify(&rsa, RSA_PUBLIC, RSA_RAW, 20,
                              expected_hmac, signature);
   rsa_free(&rsa);

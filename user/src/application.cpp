@@ -37,6 +37,7 @@ int tinkerAnalogRead(String pin);
 int tinkerAnalogWrite(String command);
 
 SYSTEM_MODE(AUTOMATIC);
+SerialDebugOutput debugOutput;
 
 /* This function is called once at start up ----------------------------------*/
 void setup()
